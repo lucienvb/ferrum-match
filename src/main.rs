@@ -1,8 +1,8 @@
 mod orderbook;
 
-use chrono::{DateTime, Utc};
-use core::pin::Pin;
+use orderbook::book::OrderBook;
 use orderbook::types::{Order, OrderId, Side};
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
@@ -13,32 +13,33 @@ pub fn next_order_id() -> OrderId {
 }
 
 fn main() {
+    let mut orderbook = OrderBook {
+        bids: BTreeMap::new(),
+        asks: BTreeMap::new(),
+    };
     let order1 = Order {
         id: next_order_id(),
-        price: 15.3,
+        price: 15,
         quantity: 5,
         side: Side::Bid,
         timestamp: SystemTime::now(),
     };
     let order2 = Order {
         id: next_order_id(),
-        price: 25.3,
+        price: 25,
         quantity: 8,
         side: Side::Ask,
         timestamp: SystemTime::now(),
     };
-    {
-        let price = order1.price;
-        let quantity = order1.quantity;
-        let side = order1.side == Side::Bid;
-        let timestamp: DateTime<Utc> = order1.timestamp.into();
-        println!("ORDER 1 --> id: ..., price: {price}, quantity: {quantity}, side: {side}, timestamp: {}\n", {timestamp.format("%d/%m/%Y %T")});
-    }
-    {
-        let price = order2.price;
-        let quantity = order1.quantity;
-        let side = order2.side == Side::Bid;
-        let timestamp: DateTime<Utc> = order2.timestamp.into();
-        println!("ORDER 2 --> id: ..., price: {price}, quantity: {quantity}, side: {side}, timestamp: {}\n", {timestamp.format("%d/%m/%Y %T")});
-    }
+    let order3 = Order {
+        id: next_order_id(),
+        price: 22,
+        quantity: 3,
+        side: Side::Ask,
+        timestamp: SystemTime::now(),
+    };
+    orderbook.add_order(order1.clone());
+    orderbook.add_order(order2.clone());
+    orderbook.add_order(order3.clone());
+    orderbook.print();
 }
