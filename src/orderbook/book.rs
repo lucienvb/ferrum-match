@@ -9,15 +9,18 @@ pub struct OrderBook {
 
 impl OrderBook {
     pub fn add_order(&mut self, order: Order) {
-        let book_side = match order.side {
-            Side::Bid => &mut self.bids,
-            Side::Ask => &mut self.asks,
+        match order.side {
+            Side::Bid => &mut self
+                .bids
+                .entry(order.price)
+                .or_insert_with(Vec::new)
+                .push(order),
+            Side::Ask => &mut self
+                .asks
+                .entry(order.price)
+                .or_insert_with(Vec::new)
+                .push(order),
         };
-
-        book_side
-            .entry(order.price)
-            .or_insert_with(Vec::new)
-            .push(order);
     }
 
     pub fn print(&self) {
@@ -29,8 +32,16 @@ impl OrderBook {
         }
 
         println!("-- Bids (buy orders) --");
-        for (price, orders) in &self.bids {
+        for (price, orders) in self.bids.iter().rev() {
             println!("@ {}: {:?}", price, orders)
+        }
+    }
+
+    pub fn cleanup_price_level(level: &mut BTreeMap<Price, Vec<Order>>, price: Price) {
+        if let Some(orders) = level.get(&price) {
+            if orders.is_empty() {
+                level.remove(&price);
+            }
         }
     }
 }

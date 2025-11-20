@@ -38,8 +38,24 @@ fn main() {
         side: Side::Ask,
         timestamp: SystemTime::now(),
     };
+    let order4 = Order {
+        id: next_order_id(),
+        price: 12,
+        quantity: 4,
+        side: Side::Bid,
+        timestamp: SystemTime::now(),
+    };
+    let order5  {
+        id: next_order_id(),
+        price: 12,
+        quantity: 7,
+        side: Side::Bid,
+        timestamp: SystemTime::now(),
+    };
     orderbook.add_order(order1.clone());
     orderbook.add_order(order2.clone());
     orderbook.add_order(order3.clone());
+    orderbook.add_order(order4.clone());
+    orderbook.add_order(order5.clone());
     orderbook.print();
 }
