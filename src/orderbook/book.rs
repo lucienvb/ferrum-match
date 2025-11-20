@@ -1,10 +1,17 @@
-use super::types::{Order, Price, Side};
+use super::types::{Order, OrderId, Price, Side};
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static ORDER_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub struct OrderBook {
     pub bids: BTreeMap<Price, Vec<Order>>,
     pub asks: BTreeMap<Price, Vec<Order>>,
+}
+
+pub fn next_order_id() -> OrderId {
+    OrderId(ORDER_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
 }
 
 impl OrderBook {
