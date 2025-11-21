@@ -1,7 +1,10 @@
-use super::types::{Order, OrderId, Price, Side};
+use crate::orderbook::types::Quantity;
+
+use super::types::{Order, OrderId, Price, Side, Trade, Trades};
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::SystemTime;
 
 static ORDER_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -49,6 +52,139 @@ impl OrderBook {
             if orders.is_empty() {
                 level.remove(&price);
             }
+        }
+    }
+
+    pub fn make_trade(
+        taker_order_id: OrderId,
+        maker_order_id: OrderId,
+        price: Price,
+        quantity: Quantity,
+        timestamp: SystemTime,
+    ) -> Trade {
+        Trade {
+            taker_order_id,
+            maker_order_id,
+            price,
+            quantity,
+            timestamp,
+        }
+    }
+
+    fn matching_ask_order(&mut self, mut incoming: Order) -> Trades {
+        let mut trades = Trades::default();
+        let mut count = 0;
+        println!("matching_ask_order");
+
+        while incoming.quantity > 0 {
+            println!("incoming.quantity: {}", incoming.quantity);
+            let price_of_best_bid = match self.bids.keys().next().map(
+                |&p| p, // - count
+            ) {
+                Some(p) => p,
+                None => break,
+            };
+            println!("price_of_best_bid: {}", price_of_best_bid);
+            if price_of_best_bid > incoming.price {
+                break;
+            }
+
+            let level = match self.bids.get_mut(&price_of_best_bid) {
+                Some(v) if !v.is_empty() => v,
+                _ => {
+                    self.bids.remove(&price_of_best_bid);
+                    continue;
+                }
+            };
+
+            let best = &mut level[0];
+
+            let qty_traded = best.quantity.min(incoming.quantity);
+
+            trades.push(Self::make_trade(
+                incoming.id,
+                best.id,
+                incoming.price,
+                qty_traded,
+                SystemTime::now(),
+            ));
+
+            best.quantity -= qty_traded;
+            incoming.quantity -= qty_traded;
+
+            if best.quantity == 0 {
+                level.remove(0);
+            }
+            if level.is_empty() {
+                self.bids.remove(&price_of_best_bid);
+            }
+            count += 1;
+        }
+        if incoming.quantity > 0 {
+            self.add_order(incoming.clone());
+        }
+
+        trades
+    }
+
+    fn matching_bid_order(&mut self, mut incoming: Order) -> Trades {
+        let mut trades = Trades::default();
+        let mut count = 0;
+        println!("matching_bid_order");
+
+        while incoming.quantity > 0 {
+            let price_of_best_ask = match self.asks.keys().next_back().map(
+                |&p| p, // + count
+            ) {
+                Some(p) => p,
+                None => break,
+            };
+            if price_of_best_ask < incoming.price {
+                break;
+            }
+
+            let level = match self.asks.get_mut(&price_of_best_ask) {
+                Some(v) if !v.is_empty() => v,
+                _ => {
+                    self.asks.remove(&price_of_best_ask);
+                    continue;
+                }
+            };
+
+            let best = &mut level[0];
+
+            let qty_traded = best.quantity.min(incoming.quantity);
+
+            trades.push(Self::make_trade(
+                incoming.id,
+                best.id,
+                incoming.price,
+                qty_traded,
+                SystemTime::now(),
+            ));
+
+            best.quantity -= qty_traded;
+            incoming.quantity -= qty_traded;
+
+            if best.quantity == 0 {
+                level.remove(0);
+            }
+            if level.is_empty() {
+                self.asks.remove(&price_of_best_ask);
+            }
+            count += 1;
+        }
+        if incoming.quantity > 0 {
+            self.add_order(incoming.clone());
+        }
+
+        trades
+    }
+
+    pub fn matching_order(&mut self, incoming: Order) -> Trades {
+        match incoming.side {
+            Side::Ask => self.matching_ask_order(incoming),
+            Side::Bid => self.matching_bid_order(incoming),
         }
     }
 }

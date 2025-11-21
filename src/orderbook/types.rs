@@ -20,3 +20,14 @@ pub struct Order {
     pub quantity: Quantity,
     pub timestamp: SystemTime,
 }
+
+#[derive(Debug, Clone)]
+pub struct Trade {
+    pub taker_order_id: OrderId,
+    pub maker_order_id: OrderId,
+    pub price: Price,
+    pub quantity: Quantity,
+    pub timestamp: SystemTime,
+}
+
+pub type Trades = Vec<Trade>;
