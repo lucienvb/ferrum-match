@@ -78,16 +78,15 @@ impl OrderBook {
 
         while incoming.quantity > 0 {
             println!("incoming.quantity: {}", incoming.quantity);
-            let price_of_best_bid = match self.bids.keys().next().map(
-                |&p| p, // - count
+            let price_of_best_bid = match self.bids.keys().next_back().map(
+                |&p| p,
             ) {
                 Some(p) => p,
                 None => break,
             };
-            println!("price_of_best_bid: {}", price_of_best_bid);
-            if price_of_best_bid > incoming.price {
+            if price_of_best_bid < incoming.price {
                 break;
-            }
+            };
 
             let level = match self.bids.get_mut(&price_of_best_bid) {
                 Some(v) if !v.is_empty() => v,
@@ -104,7 +103,7 @@ impl OrderBook {
             trades.push(Self::make_trade(
                 incoming.id,
                 best.id,
-                incoming.price,
+                price_of_best_bid,
                 qty_traded,
                 SystemTime::now(),
             ));
@@ -133,15 +132,17 @@ impl OrderBook {
         println!("matching_bid_order");
 
         while incoming.quantity > 0 {
-            let price_of_best_ask = match self.asks.keys().next_back().map(
-                |&p| p, // + count
+            println!("incoming.quantity: {}", incoming.quantity);
+            let price_of_best_ask = match self.asks.keys().next().map(
+                |&p| p,
             ) {
                 Some(p) => p,
                 None => break,
             };
-            if price_of_best_ask < incoming.price {
+            if price_of_best_ask > incoming.price {
                 break;
-            }
+            };
+            println!("price of best ask: {}", price_of_best_ask);
 
             let level = match self.asks.get_mut(&price_of_best_ask) {
                 Some(v) if !v.is_empty() => v,
@@ -158,7 +159,7 @@ impl OrderBook {
             trades.push(Self::make_trade(
                 incoming.id,
                 best.id,
-                incoming.price,
+                price_of_best_ask,
                 qty_traded,
                 SystemTime::now(),
             ));

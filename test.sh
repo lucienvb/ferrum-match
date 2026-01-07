@@ -1,2 +1,2 @@
 #!/bin/bash
-cargo fmt && cargo test --test orderbook
+cargo fmt && RUST_BACKTRACE=1 cargo test --test orderbook
