@@ -78,9 +78,7 @@ impl OrderBook {
 
         while incoming.quantity > 0 {
             println!("incoming.quantity: {}", incoming.quantity);
-            let price_of_best_bid = match self.bids.keys().next_back().map(
-                |&p| p,
-            ) {
+            let price_of_best_bid = match self.bids.keys().next_back().map(|&p| p) {
                 Some(p) => p,
                 None => break,
             };
@@ -133,9 +131,7 @@ impl OrderBook {
 
         while incoming.quantity > 0 {
             println!("incoming.quantity: {}", incoming.quantity);
-            let price_of_best_ask = match self.asks.keys().next().map(
-                |&p| p,
-            ) {
+            let price_of_best_ask = match self.asks.keys().next().map(|&p| p) {
                 Some(p) => p,
                 None => break,
             };
