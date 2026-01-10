@@ -34,7 +34,7 @@ mod orderbook {
     use super::*;
 
     #[test]
-    fn test_exact_match_buy_order() {
+    fn should_match_exact_when_buy_order() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 100, 10, Side::Ask, ts(1)));
 
@@ -50,7 +50,7 @@ mod orderbook {
     }
 
     #[test]
-    fn test_exact_match_sell_order() {
+    fn should_match_exact_when_sell_order() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 150, 25, Side::Bid, ts(1)));
 
@@ -66,7 +66,7 @@ mod orderbook {
     }
 
     #[test]
-    fn test_partial_fill_incoming_greater_buy_order() {
+    fn should_partial_fill_when_incoming_buy_order_is_larger() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 100, 5, Side::Ask, ts(1)));
 
@@ -85,7 +85,7 @@ mod orderbook {
     }
 
     #[test]
-    fn test_partial_fill_incoming_greater_sell_order() {
+    fn should_partial_fill_when_incoming_sell_order_is_larger() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 150, 12, Side::Bid, ts(1)));
 
@@ -104,7 +104,7 @@ mod orderbook {
     }
 
     #[test]
-    fn test_partial_fill_book_greater_buy_order() {
+    fn should_partial_fill_when_book_sell_order_is_larger() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 180, 25, Side::Ask, ts(1)));
 
@@ -123,7 +123,7 @@ mod orderbook {
     }
 
     #[test]
-    fn test_partial_fill_book_greater_sell_order() {
+    fn should_partial_fill_when_book_buy_order_is_larger() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 90, 35, Side::Bid, ts(1)));
 
@@ -142,7 +142,7 @@ mod orderbook {
     }
 
     #[test]
-    fn test_no_crossing_buy_order() {
+    fn should_not_cross_asks_when_buy_order() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 105, 10, Side::Ask, ts(1)));
         book.add_order(make_order(OrderId(2), 110, 10, Side::Ask, ts(2)));
@@ -156,7 +156,7 @@ mod orderbook {
     }
 
     #[test]
-    fn test_no_crossing_sell_order() {
+    fn should_not_cross_bids_when_sell_order() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 95, 10, Side::Bid, ts(1)));
         book.add_order(make_order(OrderId(2), 90, 10, Side::Bid, ts(2)));
@@ -170,7 +170,7 @@ mod orderbook {
     }
 
     #[test]
-    fn test_fifo_within_price_level_buy_order() {
+    fn should_match_fifo_within_price_level_when_buy_order() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 100, 5, Side::Ask, ts(1)));
         book.add_order(make_order(OrderId(2), 100, 5, Side::Ask, ts(2)));
@@ -191,7 +191,7 @@ mod orderbook {
     }
 
     #[test]
-    fn test_fifo_within_price_level_sell_order() {
+    fn should_match_fifo_within_price_level_when_sell_order() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 70, 3, Side::Bid, ts(1)));
         book.add_order(make_order(OrderId(2), 70, 4, Side::Bid, ts(2)));
@@ -212,7 +212,7 @@ mod orderbook {
     }
 
     #[test]
-    fn test_multi_price_levels_buy_order() {
+    fn should_match_multi_price_levels_when_buy_order() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 100, 5, Side::Ask, ts(1)));
         book.add_order(make_order(OrderId(2), 102, 6, Side::Ask, ts(2)));
@@ -237,7 +237,7 @@ mod orderbook {
     }
 
     #[test]
-    fn test_multi_price_levels_sell_order() {
+    fn should_match_multi_price_levels_when_sell_order() {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 100, 5, Side::Bid, ts(1)));
         book.add_order(make_order(OrderId(2), 102, 6, Side::Bid, ts(2)));
