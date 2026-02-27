@@ -25,8 +25,10 @@ fn ts(n: u64) -> SystemTime {
 }
 
 fn empty_book() -> OrderBook {
-    return OrderBook {bids: BTreeMap::new(),
-            asks: BTreeMap::new(),}
+    return OrderBook {
+        bids: BTreeMap::new(),
+        asks: BTreeMap::new(),
+    };
 }
 
 #[cfg(test)]
@@ -174,18 +176,22 @@ mod orderbook {
         let mut book = empty_book();
         book.add_order(make_order(OrderId(1), 100, 5, Side::Ask, ts(1)));
         book.add_order(make_order(OrderId(2), 100, 5, Side::Ask, ts(2)));
+        book.add_order(make_order(OrderId(3), 100, 5, Side::Ask, ts(3)));
 
-        let trades = book.matching_order(make_order(OrderId(3), 100, 7, Side::Bid, ts(3)));
+        let trades = book.matching_order(make_order(OrderId(4), 100, 12, Side::Bid, ts(4)));
 
-        assert_eq!(trades.len(), 2);
+        assert_eq!(trades.len(), 3);
         assert_eq!(trades[0].maker_order_id, OrderId(1));
-        assert_eq!(trades[0].taker_order_id, OrderId(3));
+        assert_eq!(trades[0].taker_order_id, OrderId(4));
         assert_eq!(trades[0].quantity, 5);
         assert_eq!(trades[1].maker_order_id, OrderId(2));
-        assert_eq!(trades[1].taker_order_id, OrderId(3));
-        assert_eq!(trades[1].quantity, 2);
+        assert_eq!(trades[1].taker_order_id, OrderId(4));
+        assert_eq!(trades[1].quantity, 5);
+        assert_eq!(trades[2].maker_order_id, OrderId(3));
+        assert_eq!(trades[2].taker_order_id, OrderId(4));
+        assert_eq!(trades[2].quantity, 2);
         let best_ask = book.asks.get(&100).unwrap();
-        assert_eq!(best_ask[0].id, OrderId(2),);
+        assert_eq!(best_ask[0].id, OrderId(3),);
         assert_eq!(best_ask[0].quantity, 3);
         assert!(book.bids.is_empty());
     }
@@ -258,5 +264,145 @@ mod orderbook {
         assert_eq!(remaining_100[0].quantity, 5);
         assert_eq!(book.bids.len(), 2);
         assert!(book.asks.is_empty());
+    }
+
+    #[test]
+    fn should_cross_partially_due_to_price_limit_when_buy_order() {
+        let mut book = empty_book();
+        book.add_order(make_order(OrderId(1), 100, 5, Side::Ask, ts(1)));
+        book.add_order(make_order(OrderId(2), 101, 5, Side::Ask, ts(2)));
+        book.add_order(make_order(OrderId(3), 102, 5, Side::Ask, ts(3)));
+
+        let trades = book.matching_order(make_order(OrderId(4), 101, 20, Side::Bid, ts(4)));
+
+        assert_eq!(trades.len(), 2);
+        assert_eq!(trades[0].price, 100);
+        assert_eq!(trades[0].quantity, 5);
+        assert_eq!(trades[0].maker_order_id, OrderId(1));
+        assert_eq!(trades[0].taker_order_id, OrderId(4));
+        assert_eq!(trades[1].price, 101);
+        assert_eq!(trades[1].quantity, 5);
+        assert_eq!(trades[1].maker_order_id, OrderId(2));
+        assert_eq!(trades[1].taker_order_id, OrderId(4));
+        let remaining = book.bids.get(&101).unwrap();
+        assert_eq!(remaining[0].quantity, 10);
+        assert_eq!(book.asks.len(), 1);
+    }
+
+    #[test]
+    fn should_cross_partially_due_to_price_limit_when_sell_order() {
+        let mut book = empty_book();
+        book.add_order(make_order(OrderId(1), 100, 5, Side::Bid, ts(1)));
+        book.add_order(make_order(OrderId(2), 101, 5, Side::Bid, ts(2)));
+        book.add_order(make_order(OrderId(3), 102, 5, Side::Bid, ts(3)));
+
+        let trades = book.matching_order(make_order(OrderId(4), 101, 30, Side::Ask, ts(4)));
+
+        assert_eq!(trades.len(), 2);
+        assert_eq!(trades[0].price, 102);
+        assert_eq!(trades[0].quantity, 5);
+        assert_eq!(trades[0].maker_order_id, OrderId(3));
+        assert_eq!(trades[0].taker_order_id, OrderId(4));
+        assert_eq!(trades[1].price, 101);
+        assert_eq!(trades[1].quantity, 5);
+        assert_eq!(trades[1].maker_order_id, OrderId(2));
+        assert_eq!(trades[1].taker_order_id, OrderId(4));
+        let remaining = book.asks.get(&101).unwrap();
+        assert_eq!(remaining[0].quantity, 20);
+        assert_eq!(book.bids.len(), 1);
+    }
+
+    #[test]
+    fn should_process_trade_as_buy_order_when_book_is_empty() {
+        let mut book = empty_book();
+
+        let trades = book.matching_order(make_order(OrderId(1), 100, 3, Side::Bid, ts(1)));
+
+        assert!(trades.is_empty());
+        let level = book.bids.get(&100).unwrap();
+        assert_eq!(level[0].quantity, 3);
+        assert_eq!(level[0].price, 100);
+        assert_eq!(level[0].id, OrderId(1));
+        assert!(book.asks.is_empty());
+    }
+
+    #[test]
+    fn should_process_trade_as_sell_order_when_book_is_empty() {
+        let mut book = empty_book();
+
+        let trades = book.matching_order(make_order(OrderId(1), 99, 6, Side::Ask, ts(1)));
+
+        assert!(trades.is_empty());
+        let level = book.asks.get(&99).unwrap();
+        assert_eq!(level[0].quantity, 6);
+        assert_eq!(level[0].price, 99);
+        assert_eq!(level[0].id, OrderId(1));
+        assert!(book.bids.is_empty());
+    }
+
+    #[test]
+    fn should_cleanup_price_level_when_buy_order() {
+        let mut book = empty_book();
+        book.add_order(make_order(OrderId(1), 50, 2, Side::Ask, ts(1)));
+
+        book.matching_order(make_order(OrderId(2), 50, 2, Side::Bid, ts(2)));
+
+        assert!(!book.asks.contains_key(&50));
+        assert!(book.asks.is_empty());
+    }
+
+    #[test]
+    fn should_cleanup_price_level_when_sell_order() {
+        let mut book = empty_book();
+        book.add_order(make_order(OrderId(1), 70, 6, Side::Bid, ts(1)));
+
+        book.matching_order(make_order(OrderId(2), 70, 6, Side::Ask, ts(2)));
+
+        assert!(!book.bids.contains_key(&70));
+        assert!(book.bids.is_empty());
+    }
+
+    #[test]
+    fn should_handle_invalid_quantity_when_buy_order() {
+        let mut book = empty_book();
+        book.add_order(make_order(OrderId(1), 70, 0, Side::Bid, ts(1)));
+
+        book.matching_order(make_order(OrderId(2), 70, 0, Side::Ask, ts(2)));
+
+        assert!(book.asks.is_empty());
+        assert!(book.bids.is_empty());
+    }
+
+    #[test]
+    fn should_handle_invalid_quantity_when_sell_order() {
+        let mut book = empty_book();
+        book.add_order(make_order(OrderId(1), 70, 0, Side::Ask, ts(1)));
+
+        book.matching_order(make_order(OrderId(2), 70, 0, Side::Bid, ts(2)));
+
+        assert!(book.asks.is_empty());
+        assert!(book.bids.is_empty());
+    }
+
+    #[test]
+    fn should_handle_invalid_price_when_buy_order() {
+        let mut book = empty_book();
+        book.add_order(make_order(OrderId(1), 0, 5, Side::Bid, ts(1)));
+
+        book.matching_order(make_order(OrderId(2), 0, 5, Side::Ask, ts(2)));
+
+        assert!(book.asks.is_empty());
+        assert!(book.bids.is_empty());
+    }
+
+    #[test]
+    fn should_handle_invalid_price_when_sell_order() {
+        let mut book = empty_book();
+        book.add_order(make_order(OrderId(1), 0, 5, Side::Ask, ts(1)));
+
+        book.matching_order(make_order(OrderId(2), 0, 5, Side::Bid, ts(2)));
+
+        assert!(book.asks.is_empty());
+        assert!(book.bids.is_empty());
     }
 }

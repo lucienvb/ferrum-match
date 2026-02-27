@@ -19,6 +19,9 @@ pub fn next_order_id() -> OrderId {
 
 impl OrderBook {
     pub fn add_order(&mut self, order: Order) {
+        if order.quantity == 0 {
+            return;
+        }
         match order.side {
             Side::Bid => &mut self
                 .bids
