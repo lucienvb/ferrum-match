@@ -3,7 +3,6 @@ mod orderbook;
 use orderbook::book::{next_order_id, OrderBook};
 use orderbook::types::{Order, OrderId, Price, Quantity, Side};
 use std::collections::BTreeMap;
-use std::ptr::null;
 use std::time::SystemTime;
 
 fn make_order(
