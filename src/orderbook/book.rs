@@ -40,14 +40,15 @@ impl OrderBook {
         println!("=== ORDER BOOK ===");
 
         println!("-- Asks (sell orders) --");
-        for (price, orders) in &self.asks {
-            println!("@ {}: {:?}", price, orders)
-        }
+        self.asks
+            .iter()
+            .for_each(|(price, orders)| println!("@ {}: {:?}", price, orders));
 
         println!("-- Bids (buy orders) --");
-        for (price, orders) in self.bids.iter().rev() {
-            println!("@ {}: {:?}", price, orders)
-        }
+        self.bids
+            .iter()
+            .rev()
+            .for_each(|(price, orders)| println!("@ {}: {:?}", price, orders));
     }
 
     pub fn cleanup_price_level(level: &mut BTreeMap<Price, Vec<Order>>, price: Price) {
@@ -76,52 +77,45 @@ impl OrderBook {
 
     fn matching_ask_order(&mut self, mut incoming: Order) -> Trades {
         let mut trades = Trades::default();
-        let mut count = 0;
-        println!("matching_ask_order");
+        println!("matching_ask_order for quantity: {}", incoming.quantity);
 
         while incoming.quantity > 0 {
-            println!("incoming.quantity: {}", incoming.quantity);
-            let price_of_best_bid = match self.bids.keys().next_back().map(|&p| p) {
-                Some(p) => p,
-                None => break,
+            let Some(&price_of_best_bid) = self.bids.keys().next_back() else {
+                break;
             };
+
             if price_of_best_bid < incoming.price {
                 break;
             };
 
-            let level = match self.bids.get_mut(&price_of_best_bid) {
-                Some(v) if !v.is_empty() => v,
-                _ => {
-                    self.bids.remove(&price_of_best_bid);
-                    continue;
+            if let Some(level) = self.bids.get_mut(&price_of_best_bid) {
+                let best = &mut level[0];
+                let qty_traded = best.quantity.min(incoming.quantity);
+
+                trades.push(Self::make_trade(
+                    incoming.id,
+                    best.id,
+                    price_of_best_bid,
+                    qty_traded,
+                    SystemTime::now(),
+                ));
+
+                best.quantity -= qty_traded;
+                incoming.quantity -= qty_traded;
+
+                if best.quantity == 0 {
+                    level.remove(0);
                 }
-            };
-
-            let best = &mut level[0];
-
-            let qty_traded = best.quantity.min(incoming.quantity);
-
-            trades.push(Self::make_trade(
-                incoming.id,
-                best.id,
-                price_of_best_bid,
-                qty_traded,
-                SystemTime::now(),
-            ));
-
-            best.quantity -= qty_traded;
-            incoming.quantity -= qty_traded;
-
-            if best.quantity == 0 {
-                level.remove(0);
-            }
-            if level.is_empty() {
+                if level.is_empty() {
+                    self.bids.remove(&price_of_best_bid);
+                }
+            } else {
                 self.bids.remove(&price_of_best_bid);
-            }
-            count += 1;
+            };
         }
+
         if incoming.quantity > 0 {
-            self.add_order(incoming.clone());
+            self.add_order(incoming);
         }
 
         trades
@@ -129,53 +123,46 @@ impl OrderBook {
 
     fn matching_bid_order(&mut self, mut incoming: Order) -> Trades {
         let mut trades = Trades::default();
-        let mut count = 0;
-        println!("matching_bid_order");
+        println!("matching_bid_order for quantity: {}", incoming.quantity);
 
         while incoming.quantity > 0 {
-            println!("incoming.quantity: {}", incoming.quantity);
-            let price_of_best_ask = match self.asks.keys().next().map(|&p| p) {
-                Some(p) => p,
-                None => break,
+            let Some(&price_of_best_ask) = self.asks.keys().next() else {
+                break;
             };
+
             if price_of_best_ask > incoming.price {
                 break;
             };
-            println!("price of best ask: {}", price_of_best_ask);
 
-            let level = match self.asks.get_mut(&price_of_best_ask) {
-                Some(v) if !v.is_empty() => v,
-                _ => {
-                    self.asks.remove(&price_of_best_ask);
-                    continue;
+            if let Some(level) = self.asks.get_mut(&price_of_best_ask) {
+                let best = &mut level[0];
+
+                let qty_traded = best.quantity.min(incoming.quantity);
+
+                trades.push(Self::make_trade(
+                    incoming.id,
+                    best.id,
+                    price_of_best_ask,
+                    qty_traded,
+                    SystemTime::now(),
+                ));
+
+                best.quantity -= qty_traded;
+                incoming.quantity -= qty_traded;
+
+                if best.quantity == 0 {
+                    level.remove(0);
                 }
-            };
-
-            let best = &mut level[0];
-
-            let qty_traded = best.quantity.min(incoming.quantity);
-
-            trades.push(Self::make_trade(
-                incoming.id,
-                best.id,
-                price_of_best_ask,
-                qty_traded,
-                SystemTime::now(),
-            ));
-
-            best.quantity -= qty_traded;
-            incoming.quantity -= qty_traded;
-
-            if best.quantity == 0 {
-                level.remove(0);
-            }
-            if level.is_empty() {
+                if level.is_empty() {
+                    self.asks.remove(&price_of_best_ask);
+                }
+            } else {
                 self.asks.remove(&price_of_best_ask);
-            }
-            count += 1;
+            };
         }
+
         if incoming.quantity > 0 {
-            self.add_order(incoming.clone());
+            self.add_order(incoming);
         }
 
         trades
