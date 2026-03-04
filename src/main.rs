@@ -41,6 +41,7 @@ fn main() {
     let trades = orderbook.matching_order(incoming);
     let incoming2 = make_order(next_order_id(), 25, 100, Side::Bid, SystemTime::now());
     let trades2 = orderbook.matching_order(incoming2);
-    println!("--> trades: {:?}", trades);
-    println!("--> trades2: {:?}", trades2);
+    println!("\n--> trades: {:?}", trades);
+    println!("--> trades2: {:?}\n", trades2);
+    orderbook.print();
 }
