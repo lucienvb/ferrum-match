@@ -51,14 +51,6 @@ impl OrderBook {
             .for_each(|(price, orders)| println!("@ {}: {:?}", price, orders));
     }
 
-    pub fn cleanup_price_level(level: &mut BTreeMap<Price, Vec<Order>>, price: Price) {
-        if let Some(orders) = level.get(&price) {
-            if orders.is_empty() {
-                level.remove(&price);
-            }
-        }
-    }
-
     pub fn make_trade(
         taker_order_id: OrderId,
         maker_order_id: OrderId,

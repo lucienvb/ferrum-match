@@ -12,6 +12,7 @@ pub enum Side {
     Ask,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Order {
     pub id: OrderId,
@@ -21,6 +22,7 @@ pub struct Order {
     pub timestamp: SystemTime,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Trade {
     pub taker_order_id: OrderId,
