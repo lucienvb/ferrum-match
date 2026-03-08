@@ -1,4 +1,4 @@
-use crate::orderbook::types::Quantity;
+use crate::orderbook::types::{OrderRequest, Quantity};
 
 use super::types::{Order, OrderId, Price, Side, Trade, Trades};
 
@@ -9,6 +9,7 @@ use std::time::SystemTime;
 static ORDER_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub struct OrderBook {
+    pub next_seq: u64,
     pub bids: BTreeMap<Price, Vec<Order>>,
     pub asks: BTreeMap<Price, Vec<Order>>,
 }
@@ -18,42 +19,60 @@ pub fn next_order_id() -> OrderId {
 }
 
 impl OrderBook {
-    pub fn add_order(&mut self, order: Order) {
-        if order.quantity == 0 {
-            return;
-        }
-        match order.side {
-            Side::Bid => &mut self
-                .bids
-                .entry(order.price)
-                .or_insert_with(Vec::new)
-                .push(order),
-            Side::Ask => &mut self
-                .asks
-                .entry(order.price)
-                .or_insert_with(Vec::new)
-                .push(order),
+    pub fn make_order_request(
+        id: OrderId,
+        price: Price,
+        quantity: Quantity,
+        side: Side,
+    ) -> OrderRequest {
+        return OrderRequest {
+            id,
+            price,
+            quantity,
+            side,
         };
     }
 
-    pub fn print(&self) {
-        println!("=== ORDER BOOK ===");
+    pub fn make_order(
+        &mut self,
+        id: OrderId,
+        price: Price,
+        quantity: Quantity,
+        side: Side,
+    ) -> Order {
+        let order = Order {
+            id,
+            price,
+            quantity,
+            side,
+            arrival_seq: self.next_seq,
+        };
+        self.next_seq += 1;
+        return order;
+    }
 
-        println!("-- Asks (sell orders) --");
-        self.asks
-            .iter()
-            .for_each(|(price, orders)| println!("@ {}: {:?}", price, orders));
+    pub fn add_order(&mut self, id: OrderId, price: Price, quantity: Quantity, side: Side) {
+        if quantity == 0 {
+            return;
+        }
 
-        println!("-- Bids (buy orders) --");
-        self.bids
-            .iter()
-            .rev()
-            .for_each(|(price, orders)| println!("@ {}: {:?}", price, orders));
+        let order = self.make_order(id, price, quantity, side);
+
+        let target_map = match order.side {
+            Side::Bid => &mut self.bids,
+            Side::Ask => &mut self.asks,
+        };
+
+        target_map
+            .entry(order.price)
+            .or_insert_with(Vec::new)
+            .push(order);
     }
 
     pub fn make_trade(
         taker_order_id: OrderId,
         maker_order_id: OrderId,
+        maker_arrival_seq: u64,
         price: Price,
         quantity: Quantity,
         timestamp: SystemTime,
@@ -61,13 +80,14 @@ impl OrderBook {
         Trade {
             taker_order_id,
             maker_order_id,
+            maker_arrival_seq,
             price,
             quantity,
             timestamp,
         }
     }
 
-    fn matching_ask_order(&mut self, mut incoming: Order) -> Trades {
+    fn matching_ask_order(&mut self, mut incoming: OrderRequest) -> Trades {
         let mut trades = Trades::default();
         println!("matching_ask_order for quantity: {}", incoming.quantity);
 
@@ -87,6 +107,7 @@ impl OrderBook {
                 trades.push(Self::make_trade(
                     incoming.id,
                     best.id,
+                    best.arrival_seq,
                     price_of_best_bid,
                     qty_traded,
                     SystemTime::now(),
@@ -107,13 +128,18 @@ impl OrderBook {
         }
 
         if incoming.quantity > 0 {
-            self.add_order(incoming);
+            self.add_order(
+                incoming.id,
+                incoming.price,
+                incoming.quantity,
+                incoming.side,
+            );
         }
 
         trades
     }
 
-    fn matching_bid_order(&mut self, mut incoming: Order) -> Trades {
+    fn matching_bid_order(&mut self, mut incoming: OrderRequest) -> Trades {
         let mut trades = Trades::default();
         println!("matching_bid_order for quantity: {}", incoming.quantity);
 
@@ -134,6 +160,7 @@ impl OrderBook {
                 trades.push(Self::make_trade(
                     incoming.id,
                     best.id,
+                    best.arrival_seq,
                     price_of_best_ask,
                     qty_traded,
                     SystemTime::now(),
@@ -154,16 +181,36 @@ impl OrderBook {
         }
 
         if incoming.quantity > 0 {
-            self.add_order(incoming);
+            self.add_order(
+                incoming.id,
+                incoming.price,
+                incoming.quantity,
+                incoming.side,
+            );
         }
 
         trades
     }
 
-    pub fn matching_order(&mut self, incoming: Order) -> Trades {
+    pub fn matching_order(&mut self, incoming: OrderRequest) -> Trades {
         match incoming.side {
             Side::Ask => self.matching_ask_order(incoming),
             Side::Bid => self.matching_bid_order(incoming),
         }
+    }
+
+    pub fn print(&self) {
+        println!("=== ORDER BOOK ===");
+
+        println!("-- Asks (sell orders) --");
+        self.asks
+            .iter()
+            .for_each(|(price, orders)| println!("@ {}: {:?}", price, orders));
+
+        println!("-- Bids (buy orders) --");
+        self.bids
+            .iter()
+            .rev()
+            .for_each(|(price, orders)| println!("@ {}: {:?}", price, orders));
     }
 }
