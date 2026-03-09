@@ -1,6 +1,7 @@
 use ferrum_match::orderbook::book::OrderBook;
 use ferrum_match::orderbook::types::{OrderId, Side};
 use std::collections::BTreeMap;
+use proptest::prelude::*;
 
 fn empty_book() -> OrderBook {
     return OrderBook {
@@ -459,5 +460,68 @@ mod orderbook {
         assert_eq!(trades[0].maker_arrival_seq, 0);
         assert!(book.asks.is_empty());
         assert_eq!(book.bids.len(), 1);
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(1000))]
+    #[test]
+    fn test_volume_conservation(
+        initial_qty in 1u64..1000u64,
+        incoming_qty in 1u64..1000u64,
+        price in 1u64..1000u64
+    ) {
+        let mut book = empty_book();
+        let maker_id = OrderId(1);
+        let taker_id = OrderId(2);
+
+        book.add_order(maker_id, price, initial_qty, Side::Ask);
+
+        let taker_req = OrderBook::make_order_request(taker_id, price, incoming_qty, Side::Bid);
+        let trades = book.matching_order(taker_req);
+
+        let traded_volume: u64 = trades.iter().map(|t| t.quantity).sum();
+
+        let remaining_ask_volume: u64 = book.asks.values()
+            .flatten()
+            .map(|o| o.quantity)
+            .sum();
+            
+        let remaining_bid_volume: u64 = book.bids.values()
+            .flatten()
+            .map(|o| o.quantity)
+            .sum();
+
+        let total_after = traded_volume * 2 + remaining_ask_volume + remaining_bid_volume;
+        let total_before = initial_qty + incoming_qty;
+
+        prop_assert_eq!(total_after, total_before, 
+            "Lost volume! Before: {}, After: {}", total_before, total_after);
+    }
+}
+
+proptest! {
+    #[test]
+    fn test_time_priority_is_respected(
+        maker_qty_list in prop::collection::vec(1u64..100u64, 2..10)
+    ) {
+        let mut book = empty_book();
+        let price = 100;
+        
+        for (i, qty) in maker_qty_list.iter().enumerate() {
+            book.add_order(OrderId(i as u64), price, *qty, Side::Ask);
+        }
+
+        let total_taker_qty: u64 = maker_qty_list.iter().sum();
+        let taker_req = OrderBook::make_order_request(OrderId(999), price, total_taker_qty, Side::Bid);
+        let trades = book.matching_order(taker_req);
+
+        for i in 0..(trades.len() - 1) {
+            prop_assert!(
+                trades[i].maker_arrival_seq < trades[i+1].maker_arrival_seq,
+                "Time priority violated! Trade {} (seq {}) came after Trade {} (seq {})",
+                i+1, trades[i+1].maker_arrival_seq, i, trades[i].maker_arrival_seq
+            );
+        }
     }
 }
