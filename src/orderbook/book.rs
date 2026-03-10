@@ -1,64 +1,59 @@
-use crate::orderbook::types::{OrderRequest, Quantity};
+use crate::orderbook::types::{OrderBook, OrderRequest, Quantity};
 
 use super::types::{Order, OrderId, Price, Side, Trade, Trades};
 
-use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
-static ORDER_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
-
-pub struct OrderBook {
-    pub next_seq: u64,
-    pub bids: BTreeMap<Price, Vec<Order>>,
-    pub asks: BTreeMap<Price, Vec<Order>>,
-}
-
-pub fn next_order_id() -> OrderId {
-    OrderId(ORDER_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
-}
-
 impl OrderBook {
-    pub fn make_order_request(
-        id: OrderId,
-        price: Price,
-        quantity: Quantity,
-        side: Side,
-    ) -> OrderRequest {
+    pub fn next_order_id(&mut self) -> OrderId {
+        let id = OrderId(self.order_id_counter);
+        self.order_id_counter += 1;
+        id
+    }
+
+    pub fn make_order_request(price: Price, quantity: Quantity, side: Side) -> OrderRequest {
         return OrderRequest {
-            id,
             price,
             quantity,
             side,
         };
     }
 
-    pub fn make_order(
-        &mut self,
-        id: OrderId,
-        price: Price,
-        quantity: Quantity,
-        side: Side,
-    ) -> Order {
+    pub fn make_order(&mut self, price: Price, quantity: Quantity) -> Order {
         let order = Order {
-            id,
+            id: Self::next_order_id(self),
             price,
             quantity,
-            side,
             arrival_seq: self.next_seq,
         };
         self.next_seq += 1;
         return order;
     }
 
-    pub fn add_order(&mut self, id: OrderId, price: Price, quantity: Quantity, side: Side) {
+    pub fn add_order_external(&mut self, price: Price, quantity: Quantity, side: Side) {
         if quantity == 0 {
             return;
         }
 
-        let order = self.make_order(id, price, quantity, side);
+        let order = self.make_order(price, quantity);
 
-        let target_map = match order.side {
+        let target_map = match side {
+            Side::Bid => &mut self.bids,
+            Side::Ask => &mut self.asks,
+        };
+
+        target_map
+            .entry(order.price)
+            .or_insert_with(Vec::new)
+            .push(order);
+    }
+
+    pub fn add_order_internal(&mut self, order: Order, side: Side) {
+        if order.quantity == 0 {
+            return;
+        }
+
+        let target_map = match side {
             Side::Bid => &mut self.bids,
             Side::Ask => &mut self.asks,
         };
@@ -87,7 +82,7 @@ impl OrderBook {
         }
     }
 
-    fn matching_ask_order(&mut self, mut incoming: OrderRequest) -> Trades {
+    fn matching_ask_order(&mut self, mut incoming: Order) -> Trades {
         let mut trades = Trades::default();
         println!("matching_ask_order for quantity: {}", incoming.quantity);
 
@@ -128,18 +123,13 @@ impl OrderBook {
         }
 
         if incoming.quantity > 0 {
-            self.add_order(
-                incoming.id,
-                incoming.price,
-                incoming.quantity,
-                incoming.side,
-            );
+            self.add_order_internal(incoming, Side::Ask);
         }
 
         trades
     }
 
-    fn matching_bid_order(&mut self, mut incoming: OrderRequest) -> Trades {
+    fn matching_bid_order(&mut self, mut incoming: Order) -> Trades {
         let mut trades = Trades::default();
         println!("matching_bid_order for quantity: {}", incoming.quantity);
 
@@ -181,21 +171,17 @@ impl OrderBook {
         }
 
         if incoming.quantity > 0 {
-            self.add_order(
-                incoming.id,
-                incoming.price,
-                incoming.quantity,
-                incoming.side,
-            );
+            self.add_order_internal(incoming, Side::Bid);
         }
 
         trades
     }
 
     pub fn matching_order(&mut self, incoming: OrderRequest) -> Trades {
+        let order = self.make_order(incoming.price, incoming.quantity);
         match incoming.side {
-            Side::Ask => self.matching_ask_order(incoming),
-            Side::Bid => self.matching_bid_order(incoming),
+            Side::Ask => self.matching_ask_order(order),
+            Side::Bid => self.matching_bid_order(order),
         }
     }
 
