@@ -1,4 +1,5 @@
 use std::time::SystemTime;
+use std::collections::BTreeMap;
 
 pub type Price = u64;
 pub type Quantity = u64;
@@ -17,7 +18,6 @@ pub enum Side {
 #[derive(Debug, Clone)]
 pub struct Order {
     pub id: OrderId,
-    pub side: Side,
     pub price: Price,
     pub quantity: Quantity,
     pub arrival_seq: ArrivalSeq,
@@ -25,7 +25,6 @@ pub struct Order {
 
 #[derive(Debug, Clone)]
 pub struct OrderRequest {
-    pub id: OrderId,
     pub side: Side,
     pub price: Price,
     pub quantity: Quantity,
@@ -40,6 +39,13 @@ pub struct Trade {
     pub price: Price,
     pub quantity: Quantity,
     pub timestamp: SystemTime,
+}
+
+pub struct OrderBook {
+    pub next_seq: u64,
+    pub order_id_counter: u64,
+    pub bids: BTreeMap<Price, Vec<Order>>,
+    pub asks: BTreeMap<Price, Vec<Order>>,
 }
 
 pub type Trades = Vec<Trade>;
