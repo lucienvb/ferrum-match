@@ -1,5 +1,5 @@
-use std::time::SystemTime;
 use std::collections::BTreeMap;
+use std::time::SystemTime;
 
 pub type Price = u64;
 pub type Quantity = u64;
