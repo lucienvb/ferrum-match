@@ -1,12 +1,21 @@
+#![allow(unexpected_cfgs)]
+
+mod modes;
 mod orderbook;
-use orderbook::types::Side;
+
+use rustyline::error::ReadlineError;
+use rustyline::{DefaultEditor, Result};
 use std::collections::BTreeMap;
+use std::env;
+use std::ops::ControlFlow;
 use tracing::info;
 
+use crate::modes::interactive::interactive_mode;
 use crate::orderbook::types::OrderBook;
 
-fn main() {
-    tracing_subscriber::fmt().with_env_filter("debug").init();
+fn main() -> Result<()> {
+    // tracing_subscriber::fmt().with_env_filter("debug").init();
+    let args: Vec<String> = env::args().collect();
 
     info!("Matching engine started");
 
@@ -19,15 +28,40 @@ fn main() {
 
     info!("Created empty orderbook");
 
-    orderbook.add_order_external(15, 5, Side::Bid);
-    orderbook.add_order_external(25, 8, Side::Ask);
-    orderbook.add_order_external(22, 3, Side::Ask);
-    orderbook.add_order_external(12, 4, Side::Bid);
-    orderbook.add_order_external(12, 4, Side::Bid);
+    let mut rl = DefaultEditor::new()?;
+    #[cfg(feature = "with-file-history")]
+    if rl.load_history("history.txt").is_err() {
+        println!("No previous history.");
+    }
+    loop {
+        let readline = rl.readline("ferrum> ");
+        match readline {
+            Ok(line) => {
+                if args.get(1).map(|s| s.as_str()) == Some("interactive") {
+                    if let ControlFlow::Break(_) = interactive_mode(&mut orderbook, line.as_str()) {
+                        break;
+                    }
+                } else {
+                    println!("Command mode not implemented yet.")
+                }
 
-    let trades = orderbook.matching_order(OrderBook::make_order_request(12, 5, Side::Ask));
-    let trades2 = orderbook.matching_order(OrderBook::make_order_request(25, 100, Side::Bid));
-    println!("\n--> trades: {:?}", trades);
-    println!("--> trades2: {:?}\n", trades2);
-    orderbook.print();
+                rl.add_history_entry(line.as_str())?;
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("CTRL-C");
+                break;
+            }
+            Err(ReadlineError::Eof) => {
+                println!("CTRL-D");
+                break;
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        }
+    }
+    #[cfg(feature = "with-file-history")]
+    rl.save_history("history.txt");
+    Ok(())
 }
