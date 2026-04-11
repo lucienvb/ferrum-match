@@ -1,6 +1,6 @@
 use ferrum_match::orderbook::types::{OrderBook, OrderId, Side};
 use proptest::prelude::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 fn empty_book() -> OrderBook {
     return OrderBook {
@@ -8,6 +8,7 @@ fn empty_book() -> OrderBook {
         order_id_counter: 1,
         bids: BTreeMap::new(),
         asks: BTreeMap::new(),
+        order_index: HashMap::new(),
     };
 }
 

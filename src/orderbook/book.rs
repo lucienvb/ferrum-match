@@ -4,7 +4,7 @@ use crate::orderbook::types::{OrderBook, OrderRequest, Quantity};
 
 use super::types::{Order, OrderId, Price, Side, Trade, Trades};
 
-use std::time::SystemTime;
+use std::{collections::BTreeMap, time::SystemTime};
 
 impl OrderBook {
     pub fn next_order_id(&mut self) -> OrderId {
@@ -27,6 +27,8 @@ impl OrderBook {
         let id = self.next_order_id();
         tracing::Span::current().record("order_id", id.0);
 
+        self.order_index.insert(id, price);
+
         let order = Order {
             id,
             price,
@@ -39,6 +41,30 @@ impl OrderBook {
         order
     }
 
+    pub fn cancel_order(&mut self, order_id: OrderId) -> Option<Order> {
+        let price = self.order_index.remove(&order_id)?;
+
+        Self::remove_from_level(&mut self.bids, price, order_id)
+            .or_else(|| Self::remove_from_level(&mut self.asks, price, order_id))
+    }
+
+    fn remove_from_level(
+        side: &mut BTreeMap<Price, Vec<Order>>,
+        price: Price,
+        order_id: OrderId,
+    ) -> Option<Order> {
+        let orders = side.get_mut(&price)?;
+        let pos = orders.iter().position(|o| o.id == order_id)?;
+        let order = orders.remove(pos);
+
+        if orders.is_empty() {
+            side.remove(&price);
+        }
+
+        Some(order)
+    }
+
+    #[allow(dead_code)]
     #[instrument(skip(self))]
     pub fn add_order_external(&mut self, price: Price, quantity: Quantity, side: Side) {
         if quantity == 0 {
@@ -206,6 +232,10 @@ impl OrderBook {
 
         if incoming.quantity > 0 {
             debug!(remaining_qty = %incoming.quantity, "Bid order not fully filled, adding remainder to book");
+            println!(
+                "Successfully made order (id={}, price={}, quantity={})",
+                incoming.id.0, incoming.price, incoming.quantity
+            );
             self.add_order_internal(incoming, Side::Bid);
         }
 
