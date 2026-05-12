@@ -8,6 +8,7 @@ chrono = "0.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"]}
 rustyline = {version = "18.0.0", features = ["with-file-history"]}
+clap = { version = "4.6.1", features = ["derive"] }
 
 [dev-dependencies]
 proptest = "1.4.0"

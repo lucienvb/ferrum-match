@@ -1,11 +1,12 @@
 use std::ops::ControlFlow;
 
-use crate::orderbook::types::{OrderBook, Side};
+use crate::orderbook::types::{OrderBook, OrderId, Side};
 
 #[derive(Debug, PartialEq)]
 enum Command {
     Buy { price: u64, qty: u64 },
     Sell { price: u64, qty: u64 },
+    Cancel { id: u64 },
     Print,
     Exit,
 }
@@ -16,22 +17,44 @@ fn parse_command_or_error(input: String) -> std::result::Result<Command, String>
     match parts.as_slice() {
         ["print"] => Ok(Command::Print),
         [side, price, qty] => {
-            let p = price.parse::<u64>().map_err(|_| "Invalid price")?;
-            let q = qty.parse::<u64>().map_err(|_| "Invalid quantity")?;
+            let p = parse_price(price)?;
+            let q = parse_quantity(qty)?;
 
             if p == 0 || q == 0 {
                 return Err("Price and quantity must be > 0".to_string());
             }
 
-            match *side {
-                "buy" => Ok(Command::Buy { price: p, qty: q }),
-                "sell" => Ok(Command::Sell { price: p, qty: q }),
-                _ => Err("Invalid side: use BUY or SELL".to_string()),
-            }
+            parse_side(side, p, q)
         }
+        ["delete", id] => Ok(Command::Cancel {
+            id: parse_id(id).unwrap(),
+        }),
         ["exit"] => Ok(Command::Exit),
         _ => Err("Parsing failed".to_string()),
     }
+}
+
+fn parse_side(side: &&str, p: u64, q: u64) -> Result<Command, String> {
+    match *side {
+        "buy" => Ok(Command::Buy { price: p, qty: q }),
+        "sell" => Ok(Command::Sell { price: p, qty: q }),
+        _ => Err("Invalid side: use BUY or SELL".to_string()),
+    }
+}
+
+pub fn parse_quantity(qty: &&str) -> Result<u64, String> {
+    let q = qty.parse::<u64>().map_err(|_| "Invalid quantity")?;
+    Ok(q)
+}
+
+pub fn parse_price(price: &&str) -> Result<u64, String> {
+    let p = price.parse::<u64>().map_err(|_| "Invalid price")?;
+    Ok(p)
+}
+
+pub fn parse_id(id: &&str) -> Result<u64, String> {
+    let result = id.parse::<u64>().map_err(|_| "Invalid id")?;
+    Ok(result)
 }
 
 pub fn interactive_mode(orderbook: &mut OrderBook, line: &str) -> ControlFlow<()> {
@@ -39,7 +62,13 @@ pub fn interactive_mode(orderbook: &mut OrderBook, line: &str) -> ControlFlow<()
         Ok(cmd) => match cmd {
             Command::Print => orderbook.print(),
             Command::Buy { price, qty } => {
-                orderbook.matching_order(OrderBook::make_order_request(price, qty, Side::Bid));
+                let trades =
+                    orderbook.matching_order(OrderBook::make_order_request(price, qty, Side::Bid));
+                println!(
+                    "Successfully made {} trades, trade information:\n{:?}",
+                    trades.len(),
+                    trades
+                );
             }
             Command::Sell { price, qty } => {
                 let trades =
@@ -50,6 +79,13 @@ pub fn interactive_mode(orderbook: &mut OrderBook, line: &str) -> ControlFlow<()
                     trades
                 );
             }
+            Command::Cancel { id } => match orderbook.cancel_order(OrderId(id)) {
+                Some(_) => println!("Successfully cancelled order with id: {}", id),
+                None => println!(
+                    "Failed to cancel order. Order with order id {} is not found.",
+                    id
+                ),
+            },
             Command::Exit => {
                 println!("EXIT");
                 return ControlFlow::Break(());
@@ -63,7 +99,7 @@ pub fn interactive_mode(orderbook: &mut OrderBook, line: &str) -> ControlFlow<()
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
 
     fn empty_orderbook() -> OrderBook {
         OrderBook {
@@ -71,6 +107,7 @@ mod tests {
             order_id_counter: 1,
             bids: BTreeMap::new(),
             asks: BTreeMap::new(),
+            order_index: HashMap::new(),
         }
     }
 

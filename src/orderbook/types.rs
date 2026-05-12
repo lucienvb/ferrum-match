@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::time::SystemTime;
 
 pub type Price = u64;
@@ -46,6 +46,7 @@ pub struct OrderBook {
     pub order_id_counter: u64,
     pub bids: BTreeMap<Price, Vec<Order>>,
     pub asks: BTreeMap<Price, Vec<Order>>,
+    pub order_index: HashMap<OrderId, Price>,
 }
 
 pub type Trades = Vec<Trade>;

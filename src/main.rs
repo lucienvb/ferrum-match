@@ -1,48 +1,157 @@
-#![allow(unexpected_cfgs)]
-
 mod modes;
 mod orderbook;
 
 use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Result};
-use std::collections::BTreeMap;
-use std::env;
+use std::collections::{BTreeMap, HashMap};
 use std::ops::ControlFlow;
 use tracing::info;
 
-use crate::modes::interactive::interactive_mode;
-use crate::orderbook::types::OrderBook;
+use crate::modes::interactive::{interactive_mode, parse_price, parse_quantity};
+use crate::orderbook::types::{OrderBook, OrderId, Side};
+use clap::{Parser, Subcommand};
+
+#[derive(Parser, Debug)]
+#[command(
+    name = "ferrum",
+    version,
+    about = "Ferrum crypto exchange matching engine",
+    long_about = None
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<CommandModeCommands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum CommandModeCommands {
+    Interactive,
+    Add {
+        #[arg(short, long)]
+        side: String,
+        #[arg(short, long)]
+        price: String,
+        #[arg(short, long)]
+        quantity: String,
+    },
+    Cancel {
+        #[arg(short, long)]
+        id: u64,
+    },
+    ViewBook,
+    Run {
+        #[arg(short, long, default_value_t = 8080)]
+        port: u16,
+    },
+}
 
 fn main() -> Result<()> {
-    // tracing_subscriber::fmt().with_env_filter("debug").init();
-    let args: Vec<String> = env::args().collect();
+    let cli = Cli::parse();
 
-    info!("Matching engine started");
+    match cli.command {
+        Some(CommandModeCommands::Interactive) => {
+            interactive_mode_loop()?;
+        }
+        Some(CommandModeCommands::Add {
+            side,
+            price,
+            quantity,
+        }) => {
+            add(side, price, quantity)?;
+        }
+        Some(CommandModeCommands::Cancel { id }) => {
+            cancel(id);
+        }
+        Some(CommandModeCommands::ViewBook) => {
+            print_book();
+        }
+        Some(CommandModeCommands::Run { port }) => {
+            println!("Starting headless mode on port {port} (not yet implemented)");
+        }
+        None => {
+            println!("No command given. Run `ferrum --help` for usage.");
+        }
+    }
+    Ok(())
+}
+
+fn print_book() {
+    let orderbook = OrderBook {
+        next_seq: 0,
+        order_id_counter: 1,
+        bids: BTreeMap::new(),
+        asks: BTreeMap::new(),
+        order_index: HashMap::new(),
+    };
+
+    orderbook.print();
+}
+
+fn cancel(id: u64) {
+    let mut orderbook = OrderBook {
+        next_seq: 0,
+        order_id_counter: 1,
+        bids: BTreeMap::new(),
+        asks: BTreeMap::new(),
+        order_index: HashMap::new(),
+    };
+
+    orderbook.cancel_order(OrderId(id));
+}
+
+fn add(side: String, price: String, quantity: String) -> Result<()> {
+    info!("COMMAND MODE: Matching engine started");
+    println!(
+        "COMMAND MODE: Received arguments are: side={}, price={}, quantity={}",
+        side, price, quantity
+    );
 
     let mut orderbook = OrderBook {
         next_seq: 0,
         order_id_counter: 1,
         bids: BTreeMap::new(),
         asks: BTreeMap::new(),
+        order_index: HashMap::new(),
     };
 
-    info!("Created empty orderbook");
+    let p = parse_price(&price.as_str()).unwrap_or(0);
+    let q = parse_quantity(&quantity.as_str()).unwrap_or(0);
+
+    let side_lower_case = side.to_lowercase();
+    let s = parse_side(side_lower_case).unwrap();
+
+    info!("COMMAND MODE: Created empty orderbook");
+
+    orderbook.matching_order(OrderBook::make_order_request(p, q, s));
+    Ok(())
+}
+
+fn parse_side(side: String) -> std::result::Result<Side, String> {
+    let side: &&str = &side.as_str();
+    match *side {
+        "buy" => Ok(Side::Bid),
+        "sell" => Ok(Side::Ask),
+        _ => Err("Invalid side: use BUY or SELL".to_string()),
+    }
+}
+
+fn interactive_mode_loop() -> Result<()> {
+    let mut orderbook = OrderBook {
+        next_seq: 0,
+        order_id_counter: 1,
+        bids: BTreeMap::new(),
+        asks: BTreeMap::new(),
+        order_index: HashMap::new(),
+    };
 
     let mut rl = DefaultEditor::new()?;
-    #[cfg(feature = "with-file-history")]
-    if rl.load_history("history.txt").is_err() {
-        println!("No previous history.");
-    }
-    loop {
+
+    Ok(loop {
         let readline = rl.readline("ferrum> ");
         match readline {
             Ok(line) => {
-                if args.get(1).map(|s| s.as_str()) == Some("interactive") {
-                    if let ControlFlow::Break(_) = interactive_mode(&mut orderbook, line.as_str()) {
-                        break;
-                    }
-                } else {
-                    println!("Command mode not implemented yet.")
+                if let ControlFlow::Break(_) = interactive_mode(&mut orderbook, line.as_str()) {
+                    break;
                 }
 
                 rl.add_history_entry(line.as_str())?;
@@ -60,8 +169,5 @@ fn main() -> Result<()> {
                 break;
             }
         }
-    }
-    #[cfg(feature = "with-file-history")]
-    rl.save_history("history.txt");
-    Ok(())
+    })
 }
