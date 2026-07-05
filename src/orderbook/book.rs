@@ -4,9 +4,23 @@ use crate::orderbook::types::{OrderBook, OrderRequest, Quantity};
 
 use super::types::{Order, OrderId, Price, Side, Trade, Trades};
 
-use std::{collections::BTreeMap, time::SystemTime};
+use std::{
+    collections::{BTreeMap, HashMap},
+    time::SystemTime,
+};
 
 impl OrderBook {
+    #[allow(dead_code)]
+    pub fn new() -> OrderBook {
+        OrderBook {
+            next_seq: 0,
+            order_id_counter: 1,
+            bids: BTreeMap::new(),
+            asks: BTreeMap::new(),
+            order_index: HashMap::new(),
+        }
+    }
+
     pub fn next_order_id(&mut self) -> OrderId {
         let id = OrderId(self.order_id_counter);
         self.order_id_counter += 1;
@@ -232,10 +246,6 @@ impl OrderBook {
 
         if incoming.quantity > 0 {
             debug!(remaining_qty = %incoming.quantity, "Bid order not fully filled, adding remainder to book");
-            println!(
-                "Successfully made order (id={}, price={}, quantity={})",
-                incoming.id.0, incoming.price, incoming.quantity
-            );
             self.add_order_internal(incoming, Side::Bid);
         }
 

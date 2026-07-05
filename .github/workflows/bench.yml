@@ -1,0 +1,33 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Build benchmarks
+        run: cargo +nightly bench --bench orderbook-benchmarks --no-run
+
+      - name: Run benchmarks
+        run: cargo +nightly bench --bench orderbook-benchmarks -- --output-format bencher 2>&1 | tee output.txt
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: "cargo"
+          output-file-path: output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          alert-threshold: "120%"
+          comment-on-alert: true
+          fail-on-alert: true
+          comment-always: true
